@@ -1,0 +1,41 @@
+name: PR base guard
+
+# Wymusza gitflow: do main/master wchodzimy wylacznie z dev/develop.
+# GitHub nie ma natywnej reguly na branch zrodlowy PR-a, wiec robi to check,
+# ktory ruleset organizacji "Require base guard on main" oznacza jako wymagany.
+#
+# pull_request_target, nie pull_request: definicja workflow jest czytana z brancha
+# BAZOWEGO (main), wiec nie da sie jej podmienic na feature branchu, zeby przepuscic PR.
+# Bezpieczne, bo nie robimy checkoutu ani nie uruchamiamy kodu z PR-a - tylko metadane.
+on:
+  pull_request_target:
+    # 'edited' jest konieczne: zmiana brancha bazowego juz otwartego PR-a
+    # wyzwala wylacznie ten typ zdarzenia.
+    types: [opened, reopened, synchronize, edited]
+
+permissions:
+  contents: read
+
+jobs:
+  guard-pr-source:
+    name: guard-pr-source
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sprawdz branch zrodlowy
+        env:
+          BASE: ${{ github.event.pull_request.base.ref }}
+          HEAD: ${{ github.event.pull_request.head.ref }}
+        run: |
+          echo "PR: $HEAD -> $BASE"
+          case "$BASE" in
+            main|master)
+              case "$HEAD" in
+                dev|develop)
+                  echo "OK: $HEAD jest dozwolonym zrodlem dla $BASE." ;;
+                *)
+                  echo "::error::Do '$BASE' mergujemy tylko z 'dev' lub 'develop'. Ten PR idzie z '$HEAD'. Zmerguj najpierw do dev/develop, potem dev/develop -> $BASE."
+                  exit 1 ;;
+              esac ;;
+            *)
+              echo "OK: branch bazowy '$BASE' nie podlega tej regule." ;;
+          esac

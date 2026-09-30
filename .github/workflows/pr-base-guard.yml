@@ -1,11 +1,14 @@
 name: PR base guard
 
-# Wymusza gitflow: do main/master wchodzimy wylacznie z dev/develop.
+# Wymusza gitflow: do main/master wchodzimy wylacznie z galezi dev tego repozytorium.
+# Tylko jedna nazwa: galaz develop tu nie istnieje, a kazdy z prawem zapisu moglby ja
+# zalozyc i wpuscic nia kod na produkcje z pominieciem dev.
 # GitHub nie ma natywnej reguly na branch zrodlowy PR-a, wiec robi to check,
 # ktory ruleset organizacji "Require base guard on main" oznacza jako wymagany.
 #
 # pull_request_target, nie pull_request: definicja workflow jest czytana z brancha
-# BAZOWEGO (main), wiec nie da sie jej podmienic na feature branchu, zeby przepuscic PR.
+# DOMYSLNEGO repo (od 12.2025 GitHub nie bierze jej z bazowego ani z PR-a), wiec nie da sie
+# jej podmienic na feature branchu, zeby przepuscic PR.
 # Bezpieczne, bo nie robimy checkoutu ani nie uruchamiamy kodu z PR-a - tylko metadane.
 on:
   pull_request_target:
@@ -25,15 +28,22 @@ jobs:
         env:
           BASE: ${{ github.event.pull_request.base.ref }}
           HEAD: ${{ github.event.pull_request.head.ref }}
+          # Nazwa galezi nie wystarczy: fork moze nazwac swoja galaz "dev". Zrodlo musi byc tym repo.
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          REPO: ${{ github.repository }}
         run: |
-          echo "PR: $HEAD -> $BASE"
+          echo "PR: $HEAD_REPO:$HEAD -> $BASE"
           case "$BASE" in
             main|master)
+              if [ "$HEAD_REPO" != "$REPO" ]; then
+                echo "::error::Do '$BASE' mergujemy tylko galaz dev z tego repozytorium ($REPO). Ten PR pochodzi z '${HEAD_REPO:-usunietego forka}'."
+                exit 1
+              fi
               case "$HEAD" in
-                dev|develop)
+                dev)
                   echo "OK: $HEAD jest dozwolonym zrodlem dla $BASE." ;;
                 *)
-                  echo "::error::Do '$BASE' mergujemy tylko z 'dev' lub 'develop'. Ten PR idzie z '$HEAD'. Zmerguj najpierw do dev/develop, potem dev/develop -> $BASE."
+                  echo "::error::Do '$BASE' mergujemy tylko z 'dev'. Ten PR idzie z '$HEAD'. Zmerguj najpierw do dev, potem dev -> $BASE."
                   exit 1 ;;
               esac ;;
             *)
